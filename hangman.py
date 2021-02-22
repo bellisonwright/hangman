@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import string
 from random import randrange
+import os
 
 
 class Hangman():
@@ -20,20 +21,36 @@ class Hangman():
         "correct": "Well done, \'{letter}\' is correct!",
         "won": "Congratulations, you win!\nThe word was \'{word}\'.",
         "incorrect": "Unlucky, \'{letter}\' is incorrect...",
-        "lost": "Unlucky, \'{letter}\' is incorrect... and you lose.\nThe word was \'{word}\'.",
+        "lost": "Unlucky, \'{letter}\' is incorrect... and you just lost.\nThe word was \'{word}\', and you got {correct_letters} out of {total_letters} letters ({percent_score}%).",
         "already lost": "You already lost...",
         "already tried": "\'{letter}\' has already been guessed. Please choose another letter.",
         "not a letter": "\'{letter}\' is not a letter. Please try again."
     }
-    def __init__(self, dictionary_array, print_outputs=True, pictures=None):
+    length_of_picture = 12
+
+    def __init__(self, dictionary_array, print_outputs=True, mode="easy", end_screen_spacing=1):
         '''
-        :param dictionary_array: dictionary, scraped from Oxford Dictionary of English
+        :param dictionary_array: np array, wordlist scraped from Oxford Dictionary of English
         :param print_outputs: True/False, should outputs of each game be printed
-        :param pictures: ASCII graphics for hangman figure in a list
+        :param mode: "easy" or "hard", 11 attempts or 7 attempts
+        :param end_screen_spacing: int,
         '''
         self.dictionary = dictionary_array
         self.print_outputs = print_outputs
-        self.pictures = pictures if pictures else ['\n\n\n\n\n\n\n         ', '\n\n       \n       \n       \n       \n       \n=========', '\n       \n      |\n      |\n      |\n      |\n      |\n=========', '\n  +---+\n      |\n      |\n      |\n      |\n      |\n=========', '\n  +---+\n     \\|\n      |\n      |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n      |\n      |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n      |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n  |   |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n /|   |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n /|\\  |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n /|\\  |\n /    |\n      |\n=========', '                 ______\n  +---+         / ____/___ _____ ___  ___ \n  |  \|        / / __/ __ `/ __ `__ \/ _ \ \n  O   |       / /_/ / /_/ / / / / / /  __/\n /|\  |       \____/\__,_/_/ /_/ /_/\___/ \n / \  |             / __ \_   _____  _____\n      |            / / / / | / / _ \/ ___/\n=========         / /_/ /| |/ /  __/ /\n                  \____/ |___/\___/_/']
+
+        self.start_gallows_at = 0
+        if mode == "hard":
+            self.start_gallows_at = 5
+        self.pictures = []
+        with open("gallows.txt", "r") as f:
+            current_element = ""
+            for num, line in enumerate(f):
+                if num % self.length_of_picture != self.length_of_picture-1:
+                    current_element += line
+                else:
+                    self.pictures.append(current_element)
+                    current_element = ""
+        self.pictures = self.pictures[self.start_gallows_at:]
 
         self.incorrect_letters = []
         self.guessed_letters = []
@@ -43,23 +60,51 @@ class Hangman():
         self.has_lost_game = False
         self.word_to_guess = None
         self.blanks = None
+        self.end_screen = []
 
     def initialise(self, word_to_guess):
         self.word_to_guess = word_to_guess.lower()
         self.blanks = ["_" for i in range(len(self.word_to_guess))]
 
+    def create_end_screen(self, result, spacing=0):
+        file_name = "gallows.txt"
+        strings_to_add = []
+        with open("you-{}.txt".format(result), "r") as f:
+            for line in f:
+                strings_to_add.append(line)
+        with open(file_name, 'r') as f:
+            current_element = ""
+            for num, line in enumerate(f.readlines()[(len(self.incorrect_letters)+self.start_gallows_at)*self.length_of_picture:(len(self.incorrect_letters)+self.start_gallows_at+1)*self.length_of_picture]):
+                if num % len(strings_to_add) != len(strings_to_add)-1:
+                    current_element += line[:-1] + spacing*" " + strings_to_add[num % len(strings_to_add)]
+                else:
+                    current_element += line[:-1] + spacing*" " + strings_to_add[num % len(strings_to_add)]
+                    self.end_screen.append(current_element)
+                    current_element = ""
+
     def print_update(self, letter, message, valid_guess=True):
         if self.print_outputs:
-            print("\n" + "".join(["━" for i in range(42)]) + "\n")
-            print(self.outputs_dict[message].format(letter=letter.upper(), word=self.word_to_guess.upper()))
+            print("\n" + "".join(["━" for i in range(43)]) + "\n")
             if valid_guess:
-                if not self.has_lost_game:
-                    print(self.pictures[len(self.incorrect_letters)])
-                else:
-                    print(self.pictures[-1])
-                print(" ".join(self.blanks))
+                os.system('cls||clear')
+            print(self.outputs_dict[message].format(letter=letter.upper(), word=self.word_to_guess.upper(), correct_letters=len(self.word_to_guess)-self.blanks.count("_"), total_letters=len(self.word_to_guess), percent_score=round(100*(len(self.word_to_guess)-self.blanks.count("_"))/len(self.word_to_guess))))
+            if valid_guess:
+                if not self.has_lost_game and not self.is_word_guessed:
+                    print("\n{}".format(self.pictures[len(self.incorrect_letters)]))
+                    print("\nWord to guess: "+" ".join(self.blanks))
+                elif self.is_word_guessed:
+                    self.create_end_screen("win", 2)
+                    print(self.end_screen[0])
+                    print("Word to guess: "+" ".join(self.blanks))
+                elif self.has_lost_game:
+                    self.create_end_screen("lose", 2)
+                    print(self.end_screen[0])
+                    print("Word to guess: "+" ".join(self.word_to_guess.upper()))
+
                 if len(self.incorrect_letters) > 0:
                     print("Incorrect guesses:", " ".join([i.upper() for i in self.incorrect_letters]))
+                else:
+                    print("Incorrect guesses: None")
 
     def one_go(self, letter):
         letter = letter.lower()
@@ -98,26 +143,30 @@ class Hangman():
                     self.letters_left.remove(letter)
 
     def play_real_time(self):
-        word_to_guess = None
-        input_new_word_to_guess = True
-        while input_new_word_to_guess:
+        while True:
             word_to_guess = input("Please choose a word: ")
             if word_to_guess in dictionary:
-                input_new_word_to_guess = False
+                break
             else:
-                while True:
-                    warning_input = input("\nAre you sure? \'{}\' doesn't look like a real word... [Y/n] ".format(word_to_guess))
-                    if warning_input == "" or "y" in warning_input or "Y" in warning_input:
-                        input_new_word_to_guess = False
-                        break
-                    elif "n" in warning_input or "N" in warning_input:
-                        break
-                    else:
-                        print("I didn't understand that... Please type either \'Y\' or \'Y\'.")
+                os.system('cls||clear')
+                warning_input = input("\nAre you sure? \'{}\' doesn't look like a real word... [Y/n] ".format(word_to_guess))
+                if "n" not in warning_input.lower():
+                    break
         self.initialise(word_to_guess)
-        print("\n"*100)
-        print(self.pictures[0])
-        print(" ".join(self.blanks))
+        print("\n" * 100)
+        os.system('cls||clear')
+        print("\n\n{}".format(self.pictures[0]))
+        print("\nWord to guess: "+" ".join(self.blanks))
+        print("Incorrect guesses: None")
+        while not self.has_lost_game and not self.is_word_guessed:
+            game.one_go(input("\nGuess a letter: "))
+
+    def play_word(self, word_to_guess):
+        self.initialise(word_to_guess)
+        os.system('cls||clear')
+        print("\n\n{}".format(self.pictures[0]))
+        print("\nWord to guess: "+" ".join(self.blanks))
+        print("Incorrect guesses: None")
         while not self.has_lost_game and not self.is_word_guessed:
             game.one_go(input("\nGuess a letter: "))
 
@@ -127,12 +176,21 @@ if __name__ == "__main__":
     import_csv = pd.read_csv("dictionary.csv", usecols=[0], header=None, names=["Words"])
     dictionary = np.array(import_csv[~import_csv.Words.str.contains(r'[^a-z]', na=False)]).ravel()
     print("Done.\n")
-    pictures11_plain = ['\n\n\n\n\n\n\n         ', '\n\n       \n       \n       \n       \n       \n=========', '\n       \n      |\n      |\n      |\n      |\n      |\n=========', '\n  +---+\n      |\n      |\n      |\n      |\n      |\n=========', '\n  +---+\n     \\|\n      |\n      |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n      |\n      |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n      |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n  |   |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n /|   |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n /|\\  |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n /|\\  |\n /    |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n /|\\  |\n / \\  |\n      |\n=========']
-    pictures11 = ['\n\n\n\n\n\n\n         ', '\n\n       \n       \n       \n       \n       \n=========', '\n       \n      |\n      |\n      |\n      |\n      |\n=========', '\n  +---+\n      |\n      |\n      |\n      |\n      |\n=========', '\n  +---+\n     \\|\n      |\n      |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n      |\n      |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n      |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n  |   |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n /|   |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n /|\\  |\n      |\n      |\n=========', '\n  +---+\n  |  \\|\n  O   |\n /|\\  |\n /    |\n      |\n=========', '                 ______\n  +---+         / ____/___ _____ ___  ___ \n  |  \|        / / __/ __ `/ __ `__ \/ _ \ \n  O   |       / /_/ / /_/ / / / / / /  __/\n /|\  |       \____/\__,_/_/ /_/ /_/\___/ \n / \  |         / __ \_   _____  _____\n      |        / / / / | / / _ \/ ___/\n=========     / /_/ /| |/ /  __/ /\n              \____/ |___/\___/_/']
-    pictures7 = pictures11[5:]
 
-    game = Hangman(dictionary)
-    game.play_real_time()
-
+    mode = "easy"
+    if "h" in input("Easy or hard mode? [E/h] ").lower():
+        mode = "hard"
+    game = Hangman(dictionary, mode=mode)
+    if "s" not in input("Single player or multiplayer? [s/M] ").lower():
+        while True:
+            game.play_real_time()
+            if "y" not in input("\nPlay again? [y/N] ").lower():
+                break
+    else:
+        while True:
+            word_index = randrange(len(dictionary))
+            game.play_word(dictionary[word_index])
+            if "y" not in input("\nPlay again? [y/N] ").lower():
+                break
 
 
