@@ -83,3 +83,4 @@ if __name__ == "__main__":
     game.one_go("f")
     game.one_go("g")
     game.one_go("k")
+    game.one_go("l")
