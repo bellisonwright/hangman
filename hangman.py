@@ -28,18 +28,19 @@ class Hangman():
     }
     length_of_picture = 12
 
-    def __init__(self, dictionary_array, print_outputs=True, mode="easy", end_screen_spacing=1):
+    def __init__(self, dictionary_array, print_outputs=True, difficulty="easy", end_screen_spacing=1):
         '''
         :param dictionary_array: np array, wordlist scraped from Oxford Dictionary of English
         :param print_outputs: True/False, should outputs of each game be printed
-        :param mode: "easy" or "hard", 11 attempts or 7 attempts
+        :param difficulty: "easy" or "hard", 11 attempts or 7 attempts
         :param end_screen_spacing: int,
         '''
         self.dictionary = dictionary_array
         self.print_outputs = print_outputs
+        self.difficulty = difficulty
 
         self.start_gallows_at = 0
-        if mode == "hard":
+        if self.difficulty == "hard":
             self.start_gallows_at = 5
         self.pictures = []
         with open("gallows.txt", "r") as f:
@@ -163,34 +164,80 @@ class Hangman():
 
     def play_word(self, word_to_guess):
         self.initialise(word_to_guess)
-        os.system('cls||clear')
-        print("\n\n{}".format(self.pictures[0]))
-        print("\nWord to guess: "+" ".join(self.blanks))
-        print("Incorrect guesses: None")
+        if self.print_outputs:
+            os.system('cls||clear')
+            print("\n\n{}".format(self.pictures[0]))
+            print("\nWord to guess: "+" ".join(self.blanks))
+            print("Incorrect guesses: None")
         while not self.has_lost_game and not self.is_word_guessed:
             game.one_go(input("\nGuess a letter: "))
 
+    def autorun(self, num_runs=10000, word_length=None, strategy="random"):
+        lang_freq = ["e", "t", "a", "o", "i", "n", "s", "r", "h", "l", "d", "c", "u", "m", "f", "p", "g", "w", "y", "b", "v", "k", "x", "j", "q", "z"]
+        dict_freq = ["e", "a", "r", "i", "o", "t", "n", "s", "l", "c", "u", "d", "p", "m", "h", "g", "b", "f", "y", "w", "k", "v", "x", "z", "j", "q"]
+        self.print_outputs = False
+        success_counter = 0
+        for i in range(num_runs):
+            dict_index = randrange(len(dictionary))
+            game.__init__(self.dictionary,difficulty=self.difficulty, print_outputs=False)
+            game.initialise(str(dictionary[dict_index]))
+            while not self.has_lost_game and not self.is_word_guessed:
+                if strategy == "random":
+                    letter_index = randrange(26)
+                    if self.alphabet[letter_index] not in self.guessed_letters:
+                        game.one_go(self.alphabet[letter_index])
+                elif strategy == "language frequency":
+                    letter = lang_freq[len(self.guessed_letters)]
+                    game.one_go(letter=letter)
+                elif strategy == "dictionary frequency":
+                    letter = dict_freq[len(self.guessed_letters)]
+                    game.one_go(letter=letter)
+            if self.is_word_guessed:
+                success_counter += 1
+            if i % int(num_runs/20) == int(num_runs/20)-1:
+                # print("#{}:\t{},\t{}/{}\tletters guessed correctly ({}%).".format(i+1, self.word_to_guess, len(self.word_to_guess)-self.blanks.count("_"), len(self.word_to_guess), round(100*(len(self.word_to_guess)-self.blanks.count("_"))/len(self.word_to_guess))).expandtabs(20))
+                print("#{}:\t{:20} {}{}/{}{}letters guessed correctly ({}%).".format(i+1, self.word_to_guess+",", len(self.word_to_guess)-self.blanks.count("_"), " "*(2-len(str(len(self.word_to_guess)-self.blanks.count("_")))), len(self.word_to_guess), " "*(3-len(str(len(self.word_to_guess)))), round(100*(len(self.word_to_guess)-self.blanks.count("_"))/len(self.word_to_guess))))
+        return success_counter, num_runs
 
 if __name__ == "__main__":
-    print("Loading...", end=" ", flush=True)
+    print("\n" * 100)
+    os.system('cls||clear')
+
+    difficulty_level = "easy"
+    if "h" in input("Easy or hard mode? [E/h] ").lower():
+        difficulty_level = "hard"
+    mode = input("Pick a mode:\n\n1. Single player\n2. Multiplayer\n3. Autorun (computer vs computer)\n\n[1/2/3]: ").lower()
+    print("Loading dictionary...", end=" ", flush=True)
     import_csv = pd.read_csv("dictionary.csv", usecols=[0], header=None, names=["Words"])
     dictionary = np.array(import_csv[~import_csv.Words.str.contains(r'[^a-z]', na=False)]).ravel()
     print("Done.\n")
-
-    mode = "easy"
-    if "h" in input("Easy or hard mode? [E/h] ").lower():
-        mode = "hard"
-    game = Hangman(dictionary, mode=mode)
-    if "s" not in input("Single player or multiplayer? [s/M] ").lower():
+    if "2" in mode:
         while True:
+            game = Hangman(dictionary, difficulty=difficulty_level)
             game.play_real_time()
             if "y" not in input("\nPlay again? [y/N] ").lower():
                 break
-    else:
+    elif "1" in mode:
         while True:
+            game = Hangman(dictionary, difficulty=difficulty_level)
             word_index = randrange(len(dictionary))
             game.play_word(dictionary[word_index])
             if "y" not in input("\nPlay again? [y/N] ").lower():
                 break
+    elif "3" in mode:
+        game = Hangman(dictionary, difficulty=difficulty_level)
+        strat_key = {"1": "random", "2": "language frequency", "3": "dictionary frequency", "4": "all"}
+        strat = strat_key[input("Choose a strategy:\n\n1. Random\n2. By language frequency\n3. By dictionary frequency\n4. All\n\n[1/2/3/4]: ")]
+        n = input("How many runs? (default is 10000) ")
+        if n == "":
+            n = 10000
+        if strat != "all":
+            results = game.autorun(int(n), strategy=strat)
+            print("Computer was successful in {} out of {} games ({}%) using the {} strategy.".format(results[0], results[1], round(100*results[0]/results[1], 2), strat))
+        else:
+            for i in range(3):
+                results = game.autorun(int(n), strategy=strat_key[str(i+1)])
+                print("Computer was successful in {} out of {} games ({}%) using the {} strategy.\n\n".format(results[0], results[1], round(100*results[0]/results[1], 2), strat))
+
 
 
